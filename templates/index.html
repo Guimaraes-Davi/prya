@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prya — Assistente Python</title>
+
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+
+  <style>
+    /* ── Variáveis ── */
+    :root {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --surface-2:   #1c2128;
+      --border:      #30363d;
+      --text:        #e6edf3;
+      --text-muted:  #8b949e;
+      --accent:      #7c3aed;
+      --accent-2:    #6366f1;
+      --user-bubble: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+      --prya-bubble: #1c2128;
+      --danger:      #f85149;
+      --radius:      14px;
+      --radius-sm:   8px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont,
+      'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+    /* ── Layout principal ── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Cabeçalho ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: var(--user-bubble);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 15px; color: #fff;
+      flex-shrink: 0;
+    }
+    .brand-name { font-size: 17px; font-weight: 600; }
+    .brand-sub  { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+    .btn-limpar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px; cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-limpar:hover { border-color: var(--danger); color: var(--danger); }
+    .btn-limpar svg { flex-shrink: 0; }
+
+    /* ── Área de mensagens ── */
+    #mensagens {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+    #mensagens::-webkit-scrollbar { width: 6px; }
+    #mensagens::-webkit-scrollbar-track { background: transparent; }
+    #mensagens::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Mensagem individual ── */
+    .msg {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      max-width: 88%;
+      animation: fadeUp .2s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg.usuario  { align-self: flex-end; flex-direction: row-reverse; }
+    .msg.prya     { align-self: flex-start; }
+
+    /* Avatar */
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; flex-shrink: 0;
+    }
+    .msg.usuario .avatar { background: var(--user-bubble); color: #fff; }
+    .msg.prya    .avatar { background: var(--surface); border: 1px solid var(--border);
+                           color: var(--accent); }
+
+    /* Bolha */
+    .bolha {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      line-height: 1.65;
+      font-size: 14.5px;
+      word-break: break-word;
+    }
+    .msg.usuario .bolha {
+      background: var(--user-bubble);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.prya .bolha {
+      background: var(--prya-bubble);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ── Markdown dentro das bolhas ── */
+    .bolha p   { margin-bottom: 10px; }
+    .bolha p:last-child { margin-bottom: 0; }
+    .bolha ul, .bolha ol { padding-left: 20px; margin-bottom: 10px; }
+    .bolha li  { margin-bottom: 4px; }
+    .bolha strong { font-weight: 600; }
+    .bolha em     { font-style: italic; }
+    .bolha code:not(pre code) {
+      background: rgba(255,255,255,.08);
+      padding: 2px 6px; border-radius: 4px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+    }
+    .msg.usuario .bolha code:not(pre code) { background: rgba(255,255,255,.18); }
+
+    /* ── Bloco de código ── */
+    .bloco-codigo {
+      position: relative;
+      margin: 10px 0;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .bloco-codigo-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 14px;
+      background: #0d1117;
+      border-bottom: 1px solid var(--border);
+    }
+    .bloco-lang {
+      font-size: 11px; font-weight: 600; letter-spacing: .04em;
+      color: var(--text-muted); text-transform: uppercase;
+    }
+    .btn-copiar {
+      display: flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      font-size: 11px; cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-copiar:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-copiar.copiado { border-color: #3fb950; color: #3fb950; }
+    .bloco-codigo pre {
+      margin: 0 !important;
+      padding: 14px 16px !important;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+    }
+    .bloco-codigo pre::-webkit-scrollbar { height: 4px; }
+    .bloco-codigo pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Indicador "pensando" ── */
+    .pensando {
+      display: flex; gap: 10px; align-items: center;
+      align-self: flex-start;
+      animation: fadeUp .2s ease;
+    }
+    .pensando .avatar { background: var(--surface); border: 1px solid var(--border); color: var(--accent); }
+    .pensando-texto {
+      background: var(--prya-bubble);
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      border-bottom-left-radius: 4px;
+      font-size: 14px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dots { display: flex; gap: 4px; }
+    .dots span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); opacity: .4;
+      animation: pulsar 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: .2s; }
+    .dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes pulsar {
+      0%, 80%, 100% { opacity: .4; transform: scale(1); }
+      40%            { opacity: 1;  transform: scale(1.3); }
+    }
+
+    /* ── Área de input ── */
+    .input-area {
+      padding: 16px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .input-wrapper {
+      display: flex; gap: 10px; align-items: flex-end;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      transition: border-color .2s;
+    }
+    .input-wrapper:focus-within { border-color: var(--accent); }
+    #campo-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 14.5px; resize: none;
+      font-family: inherit; line-height: 1.5;
+      max-height: 160px; overflow-y: auto;
+    }
+    #campo-input::placeholder { color: var(--text-muted); }
+    #campo-input::-webkit-scrollbar { width: 4px; }
+    #campo-input::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .btn-enviar {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: var(--user-bubble);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: opacity .15s, transform .1s;
+    }
+    .btn-enviar:hover:not(:disabled) { opacity: .85; transform: scale(1.05); }
+    .btn-enviar:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-enviar svg { color: #fff; }
+
+    /* ── Boas-vindas ── */
+    .boas-vindas {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; flex: 1; gap: 12px;
+      color: var(--text-muted); text-align: center; padding: 40px;
+    }
+    .boas-vindas .logo-grande {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--user-bubble);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 700; color: #fff;
+    }
+    .boas-vindas h2 { font-size: 20px; color: var(--text); font-weight: 600; }
+    .boas-vindas p  { font-size: 14px; max-width: 360px; line-height: 1.6; }
+
+    /* ── Rodapé da área de input ── */
+    .input-hint {
+      text-align: center; font-size: 11.5px; color: var(--text-muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Cabeçalho -->
+  <header>
+    <div class="header-brand">
+      <div class="logo">P</div>
+      <div>
+        <div class="brand-name">Prya</div>
+        <div class="brand-sub">Assistente Python local</div>
+      </div>
+    </div>
+    <button class="btn-limpar" onclick="limparHistorico()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+        <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+      </svg>
+      Limpar
+    </button>
+  </header>
+
+  <!-- Área de mensagens -->
+  <div id="mensagens">
+    <div class="boas-vindas" id="boas-vindas">
+      <div class="logo-grande">P</div>
+      <h2>Olá! Sou o Prya</h2>
+      <p>Seu assistente de código Python local. Posso gerar funções, analisar bugs e explicar conceitos — tudo offline.</p>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea id="campo-input" placeholder="Digite sua mensagem…" rows="1"
+                oninput="ajustarAltura(this)" onkeydown="teclaEnter(event)"></textarea>
+      <button class="btn-enviar" id="btn-enviar" onclick="enviar()" title="Enviar (Enter)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+    <div class="input-hint">Enter para nova linha &nbsp;·&nbsp; Shift+Enter para enviar</div>
+  </div>
+
+</div>
+
+<script>
+  /* ── Configuração do marked.js ── */
+  const renderer = new marked.Renderer();
+
+  renderer.code = function(code, lang) {
+    const linguagem = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
+    const destacado = hljs.highlight(code, { language: linguagem }).value;
+    const id = 'bloco-' + Math.random().toString(36).slice(2);
+    return `
+      <div class="bloco-codigo">
+        <div class="bloco-codigo-header">
+          <span class="bloco-lang">${linguagem}</span>
+          <button class="btn-copiar" onclick="copiarCodigo('${id}', this)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+            Copiar
+          </button>
+        </div>
+        <pre><code id="${id}" class="hljs language-${linguagem}">${destacado}</code></pre>
+      </div>`;
+  };
+
+  marked.setOptions({ renderer, breaks: true, gfm: true });
+
+  /* ── Estado ── */
+  let streamingAtivo = false;
+
+  /* ── Utilitários de DOM ── */
+  const $msgs       = document.getElementById('mensagens');
+  const $input      = document.getElementById('campo-input');
+  const $btnEnviar  = document.getElementById('btn-enviar');
+  const $boasVindas = document.getElementById('boas-vindas');
+
+  function ocultarBoasVindas() {
+    if ($boasVindas) $boasVindas.remove();
+  }
+
+  function rolарParaBaixo() {
+    $msgs.scrollTop = $msgs.scrollHeight;
+  }
+
+  function ajustarAltura(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }
+
+  function teclaEnter(e) {
+    if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); enviar(); }
+  }
+
+  /* ── Cria bolha do usuário ── */
+  function criarBolhaUsuario(texto) {
+    const div = document.createElement('div');
+    div.className = 'msg usuario';
+    div.innerHTML = `
+      <div class="avatar">U</div>
+      <div class="bolha">${escaparHTML(texto)}</div>`;
+    $msgs.appendChild(div);
+    rolарParaBaixo();
+  }
+
+  /* ── Cria bolha do Prya (vazia, para streaming) ── */
+  function criarBolhaPrya() {
+    const div = document.createElement('div');
+    div.className = 'msg prya';
+    div.innerHTML = `<div class="avatar">P</div><div class="bolha"></div>`;
+    $msgs.appendChild(div);
+    rolарParaBaixo();
+    return div.querySelector('.bolha');
+  }
+
+  /* ── Atualiza bolha durante streaming (markdown progressivo) ── */
+  function atualizarBolha(bolha, texto) {
+    bolha.innerHTML = marked.parse(texto);
+    rolарParaBaixo();
+  }
+
+  /* ── Finaliza bolha com highlight.js aplicado ── */
+  function finalizarBolha(bolha, texto) {
+    bolha.innerHTML = marked.parse(texto);
+    // highlight.js já é aplicado via renderer.code, mas reforçamos para inline
+    bolha.querySelectorAll('pre code:not(.hljs)').forEach(el => hljs.highlightElement(el));
+    rolарParaBaixo();
+  }
+
+  /* ── Indicador "pensando" ── */
+  function mostrarPensando() {
+    const div = document.createElement('div');
+    div.className = 'pensando';
+    div.id = 'pensando';
+    div.innerHTML = `
+      <div class="avatar">P</div>
+      <div class="pensando-texto">
+        Prya está pensando
+        <div class="dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>`;
+    $msgs.appendChild(div);
+    rolарParaBaixo();
+  }
+
+  function ocultarPensando() {
+    const el = document.getElementById('pensando');
+    if (el) el.remove();
+  }
+
+  /* ── Copiar código ── */
+  function copiarCodigo(id, btn) {
+    const codigo = document.getElementById(id)?.innerText ?? '';
+    navigator.clipboard.writeText(codigo).then(() => {
+      btn.classList.add('copiado');
+      btn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Copiado!`;
+      setTimeout(() => {
+        btn.classList.remove('copiado');
+        btn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>
+          Copiar`;
+      }, 2000);
+    });
+  }
+
+  /* ── Escapar HTML (para texto do usuário) ── */
+  function escaparHTML(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+              .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Enviar mensagem ── */
+  async function enviar() {
+    const texto = $input.value.trim();
+    if (!texto || streamingAtivo) return;
+
+    ocultarBoasVindas();
+    criarBolhaUsuario(texto);
+    $input.value = '';
+    $input.style.height = 'auto';
+    mostrarPensando();
+
+    streamingAtivo = true;
+    $btnEnviar.disabled = true;
+
+    let bolha = null;
+    let acumulado = '';
+    let buffer = '';
+
+    try {
+      const resp = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mensagem: texto }),
+      });
+
+      if (!resp.ok) {
+        ocultarPensando();
+        criarBolhaPrya().textContent = 'Erro ao processar a mensagem.';
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Processa linhas completas do buffer SSE
+        const linhas = buffer.split('\n');
+        buffer = linhas.pop(); // última linha pode estar incompleta
+
+        for (const linha of linhas) {
+          if (!linha.startsWith('data: ')) continue;
+          const dado = linha.slice(6);
+
+          if (dado === '[FIM]') {
+            finalizarBolha(bolha, acumulado);
+            break;
+          }
+
+          // Desfaz o escape de newlines feito no servidor
+          const trecho = dado.replace(/\\n/g, '\n');
+
+          if (!bolha) {
+            ocultarPensando();
+            bolha = criarBolhaPrya();
+          }
+
+          acumulado += trecho;
+          atualizarBolha(bolha, acumulado);
+        }
+      }
+
+      // Garante que a bolha seja criada mesmo se o stream vier vazio
+      if (!bolha) {
+        ocultarPensando();
+        bolha = criarBolhaPrya();
+        bolha.textContent = '(sem resposta)';
+      }
+
+    } catch (err) {
+      ocultarPensando();
+      const b = criarBolhaPrya();
+      b.textContent = 'Erro de conexão. Verifique se o Ollama está rodando em localhost:11434.';
+    } finally {
+      streamingAtivo = false;
+      $btnEnviar.disabled = false;
+      $input.focus();
+    }
+  }
+
+  /* ── Limpar histórico ── */
+  async function limparHistorico() {
+    if (streamingAtivo) return;
+    await fetch('/limpar', { method: 'POST' });
+    $msgs.innerHTML = '';
+    // Recria boas-vindas
+    const div = document.createElement('div');
+    div.className = 'boas-vindas';
+    div.id = 'boas-vindas';
+    div.innerHTML = `
+      <div class="logo-grande">P</div>
+      <h2>Olá! Sou o Prya</h2>
+      <p>Seu assistente de código Python local. Posso gerar funções, analisar bugs e explicar conceitos — tudo offline.</p>`;
+    $msgs.appendChild(div);
+    $input.focus();
+  }
+
+  /* ── Foco inicial ── */
+  $input.focus();
+</script>
+</body>
+</html>
