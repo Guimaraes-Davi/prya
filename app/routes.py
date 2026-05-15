@@ -1,5 +1,4 @@
 from flask import Blueprint, Response, jsonify, render_template, request, stream_with_context
-
 from .memoria import adicionar_mensagem, limpar_historico, obter_historico
 from .ollama import chamar_ollama_stream
 
@@ -40,14 +39,14 @@ def chat():
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # desativa buffering no Nginx, se usado
+            "X-Accel-Buffering": "no",
         },
     )
 
 
 @rotas.post("/limpar")
 def limpar():
-    """Apaga o histórico e inicia um novo chat."""
+    """Apaga o histórico em memória e em disco."""
     limpar_historico()
     return jsonify({"status": "ok"})
 
@@ -56,3 +55,37 @@ def limpar():
 def historico():
     """Retorna o histórico atual (útil para debug)."""
     return jsonify(obter_historico())
+
+
+@rotas.get("/status")
+def status():
+    """Informa se há arquivos indexáveis em dados/ e se o ChromaDB já foi populado."""
+    from .contexto import contexto_disponivel, listar_arquivos_dados
+    arquivos = listar_arquivos_dados()
+    return jsonify({
+        "tem_arquivos": len(arquivos) > 0,
+        "arquivos": arquivos,
+        "indexado": contexto_disponivel(),
+    })
+
+
+@rotas.post("/indexar")
+def indexar():
+    """Dispara a indexação completa dos documentos de dados/."""
+    from .contexto import indexar_dados, listar_arquivos_dados
+    arquivos = listar_arquivos_dados()
+    if not arquivos:
+        return jsonify({"erro": "Nenhum arquivo .txt, .md ou .pdf encontrado em dados/."}), 400
+
+    try:
+        total_chunks = indexar_dados()
+        return jsonify({
+            "status": "ok",
+            "chunks": total_chunks,
+            "arquivos": len(arquivos),
+        })
+    except RuntimeError as e:
+        # ChromaDB não instalado
+        return jsonify({"erro": str(e)}), 503
+    except Exception as e:
+        return jsonify({"erro": f"Falha na indexação: {e}"}), 500

@@ -2,9 +2,9 @@ import json
 import requests
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
-MODELO = "deepseek-coder-v2"
+MODELO     = "deepseek-coder-v2"
 
-SYSTEM_PROMPT = (
+SYSTEM_PROMPT_BASE = (
     "Você é o Prya, um assistente especializado em código Python. "
     "Responda SEMPRE em português do Brasil. "
     "Ao gerar código, adicione comentários em português. "
@@ -12,16 +12,39 @@ SYSTEM_PROMPT = (
 )
 
 
+def _montar_system_prompt(pergunta: str) -> str:
+    """
+    Monta o system prompt final.
+    Se houver documentos indexados, busca chunks relevantes e os injeta.
+    """
+    try:
+        from .contexto import buscar_contexto, contexto_disponivel
+        if contexto_disponivel():
+            chunks = buscar_contexto(pergunta, n=3)
+            if chunks:
+                contexto_texto = "\n\n---\n\n".join(chunks)
+                return (
+                    SYSTEM_PROMPT_BASE
+                    + "\n\nUse OBRIGATORIAMENTE o contexto abaixo para responder. "
+                    + "Se a resposta estiver no contexto, NUNCA invente alternativas.\n\n"
+                    + "=== CONTEXTO ===\n"
+                    + contexto_texto
+                    + "\n=== FIM DO CONTEXTO ==="
+                )
+    except Exception:
+        pass  # contexto indisponível não impede o chat
+
+    return SYSTEM_PROMPT_BASE
+
+
 def chamar_ollama(historico: list[dict]) -> str:
-    """Envia o histórico ao Ollama e retorna a resposta completa do modelo."""
-    mensagens = [{"role": "system", "content": SYSTEM_PROMPT}] + historico
+    """Envia o histórico ao Ollama e retorna a resposta completa."""
+    pergunta = next(
+        (m["content"] for m in reversed(historico) if m["role"] == "user"), ""
+    )
+    mensagens = [{"role": "system", "content": _montar_system_prompt(pergunta)}] + historico
 
-    payload = {
-        "model": MODELO,
-        "messages": mensagens,
-        "stream": True,
-    }
-
+    payload = {"model": MODELO, "messages": mensagens, "stream": True}
     resposta_completa = []
 
     try:
@@ -34,7 +57,6 @@ def chamar_ollama(historico: list[dict]) -> str:
                 trecho = chunk.get("message", {}).get("content", "")
                 if trecho:
                     resposta_completa.append(trecho)
-                # Ollama sinaliza fim com done=True
                 if chunk.get("done"):
                     break
     except requests.exceptions.ConnectionError:
@@ -49,17 +71,23 @@ def chamar_ollama(historico: list[dict]) -> str:
 
 def chamar_ollama_stream(historico: list[dict]):
     """Gerador que emite os chunks de texto à medida que o modelo os produz."""
-    mensagens = [{"role": "system", "content": SYSTEM_PROMPT}] + historico
+    pergunta = next(
+        (m["content"] for m in reversed(historico) if m["role"] == "user"), ""
+    )
+    mensagens = [{"role": "system", "content": _montar_system_prompt(pergunta)}] + historico
 
-    payload = {
-        "model": MODELO,
-        "messages": mensagens,
-        "stream": True,
-    }
+    payload = {"model": MODELO, "messages": mensagens, "stream": True}
 
     try:
         with requests.post(OLLAMA_URL, json=payload, stream=True, timeout=120) as r:
-            r.raise_for_status()
+            if not r.ok:
+                try:
+                    corpo = r.json()
+                    msg_erro = corpo.get("error", r.text)
+                except Exception:
+                    msg_erro = r.text or f"HTTP {r.status_code}"
+                yield f"Erro do Ollama: {msg_erro}"
+                return
             for linha in r.iter_lines():
                 if not linha:
                     continue
