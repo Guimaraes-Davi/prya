@@ -3,6 +3,10 @@
 Assistente de código Python que roda 100% offline na sua máquina.
 Powered by DeepSeek Coder V2 via Ollama.
 
+## Status
+
+**V2 — congelada.** O projeto está funcional e estável. O desenvolvimento ativo continua na V3 (CLI agentic), que está em pausa enquanto outros projetos do portfólio avançam.
+
 ## O que é
 
 Prya é um assistente de código privado e local. Nenhum dado sai da sua máquina.
@@ -10,101 +14,106 @@ Sem API keys, sem custos, sem internet.
 
 ## Funcionalidades
 
-- Geração de funções Python sob demanda
-- Análise de código com detecção de bugs e sugestões de melhoria
-- Memória de conversa — lembra o contexto da sessão atual
-- Streaming em tempo real — resposta aparece sendo digitada
-- Syntax highlight automático em blocos de código
-- Botão copiar em cada bloco de código
-- Interface web local dark mode
+- Chat com memória persistente entre sessões (salva em JSON)
+- RAG com ChromaDB — indexa documentação local e injeta contexto nas respostas
+- Geração e análise de código Python
+- Streaming em tempo real
+- Syntax highlight com botão copiar
+- Interface web dark mode
+- Rota `/indexar` para indexar arquivos da pasta `dados/`
+- Rota `/status` para verificar estado da indexação
+
+## Stack
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Backend | Python / Flask |
+| LLM | Ollama — DeepSeek Coder V2 (15.7B Q4_0) |
+| RAG | ChromaDB 1.5+ |
+| Embeddings | nomic-embed-text via Ollama API |
+| Interface | HTML / CSS / JavaScript |
 
 ## Requisitos
 
 - Python 3.10+
-- [Ollama](https://ollama.com) instalado e rodando
-- Modelo DeepSeek Coder V2 baixado
+- Ollama instalado e rodando
+- Modelos baixados: `deepseek-coder-v2` e `nomic-embed-text`
+- GPU com VRAM suficiente ou CPU (veja observações abaixo)
 
 ## Instalação
 
-**1. Clone o repositório**
 ```bash
 git clone https://github.com/Guimaraes-Davi/prya.git
 cd prya
+pip install flask requests chromadb
 ```
 
-**2. Instale as dependências Python**
-```bash
-pip install flask requests
+## Configuração de hardware
+
+O DeepSeek Coder V2 ocupa ~9.2GB. Com ChromaDB rodando junto, máquinas com
+menos de 16GB de RAM precisam forçar CPU para evitar estouro de memória:
+
+```powershell
+# PowerShell — antes de iniciar o Ollama
+$env:CUDA_VISIBLE_DEVICES="-1"
+ollama serve
 ```
 
-**3. Instale o Ollama e baixe o modelo**
-```bash
-# Instale o Ollama em https://ollama.com
-ollama pull deepseek-coder-v2
-```
+Se sua GPU tiver VRAM suficiente (12GB+), omita o passo acima.
 
-**4. Inicie a Prya**
+## Como rodar
+
 ```bash
+# Outro terminal — com Ollama já rodando
 python run.py
 ```
 
-Acessa `http://localhost:5000` no navegador.
+Acessa `http://localhost:5000`.
 
-## Como usar
+## RAG — documentação local
 
-**Gerar código:**
+Coloque arquivos `.txt`, `.md` ou `.pdf` na pasta `dados/` e indexe:
 
-Escreva uma função Python que lê um CSV e retorna uma lista de dicionários
+```bash
+# Via curl ou Invoke-RestMethod no PowerShell
+curl -X POST http://localhost:5000/indexar
+```
 
-**Analisar bugs:**
+Verifique o status da indexação:
 
-Analise esse código e me diga o que está errado:
-[cole seu código aqui]
+```
+GET http://localhost:5000/status
+```
 
-**Contexto persistente:**
-A Prya lembra o que você disse antes na mesma sessão.
-Você pode pedir adaptações sem repetir o contexto:
-
-Agora adapte essa função para aceitar também arquivos YAML
+Após indexar, a Prya usa os documentos como contexto nas respostas.
 
 ## Arquitetura
 
-Você digita
-↓
-Flask recebe a mensagem
-↓
-Histórico de conversa é montado (janela de 20 mensagens)
-↓
-Ollama API processa com DeepSeek Coder V2
-↓
-Resposta chega em streaming
-↓
-Interface renderiza em tempo real com syntax highlight
+```
+app/
+├── __init__.py      ← factory Flask
+├── ollama.py        ← chamada ao Ollama + injeção de contexto RAG
+├── memoria.py       ← histórico com janela de 20 mensagens + persistência JSON
+├── contexto.py      ← RAG com ChromaDB + embeddings via nomic-embed-text
+└── routes.py        ← rotas Flask (/chat, /indexar, /status, /limpar)
+```
 
 ## Roadmap
 
-- [x] V1 — Chat com memória e análise de código
-- [ ] V2 — RAG com documentação local (pasta `dados/`)
-- [ ] V3 — Modo editor com análise de arquivo ao vivo
+| Versão | Status | Descrição |
+|--------|--------|-----------|
+| V1.0 | ✅ | Chat com memória + streaming + syntax highlight |
+| V1.1 | ✅ | Redesign minimalista — paleta neutra (#121212 / #94dd5f) |
+| V2.0 | ✅ | RAG com ChromaDB + nomic-embed-text |
+| V2.1 | ✅ | Persistência real do histórico entre reinicializações |
+| V3.0 | ⏸ | CLI agentic multi-linguagem (projeto separado, em pausa) |
 
 ## Observações
 
-- Prya roda exclusivamente local — não há deploy online por design
+- Prya roda exclusivamente local — sem deploy online por design
 - A pasta `dados/` é ignorada pelo Git — use para documentação privada
-- Memória de conversa é volátil — reiniciar o servidor limpa o histórico (V2 vai persistir)
-- Velocidade depende do hardware — sem GPU dedicada espere 2-5s por resposta
-
-## Uso e Distribuição
-
-Prya é uma ferramenta de uso privado e exclusivo. O repositório está público para fins de portfólio e demonstração técnica, mas não foi projetado para uso facilitado por terceiros.
-
-Para rodar localmente é necessário:
-- Instalar e configurar o Ollama manualmente
-- Baixar o modelo DeepSeek Coder V2 (~9GB)
-- Configurar a pasta `dados/` com contexto próprio
-
-Sem esses passos, a aplicação não opera de forma útil.
+- Velocidade varia com hardware: CPU espere 15-60s por resposta dependendo do modelo
 
 ## Autor
 
-Davi Guimarães
+Davi Guimarães — [davi-guimaraes.com](https://davi-guimaraes.com)

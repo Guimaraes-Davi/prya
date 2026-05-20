@@ -58,6 +58,8 @@
     .brand-name   { font-size: 15px; font-weight: 600; color: var(--text); }
     .brand-sub    { font-size: 11.5px; color: var(--text-muted); }
 
+    .header-acoes { display: flex; align-items: center; gap: 8px; }
+
     .btn-limpar {
       display: flex; align-items: center; gap: 6px;
       padding: 6px 13px;
@@ -69,6 +71,32 @@
       transition: border-color .15s, color .15s;
     }
     .btn-limpar:hover { border-color: var(--danger); color: var(--danger); }
+
+    .btn-indexar {
+      display: none; /* revelado via JS quando tem_arquivos=true */
+      align-items: center; gap: 6px;
+      padding: 6px 13px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12.5px; cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-indexar:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .btn-indexar:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-indexar.indexado { border-color: var(--accent); color: var(--accent); }
+
+    /* Spinner de loading */
+    .spinner {
+      width: 11px; height: 11px;
+      border: 1.5px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: girar .6s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
 
     /* ── Área de mensagens ── */
     #mensagens {
@@ -281,13 +309,23 @@
       <div class="brand-name">Prya</div>
       <div class="brand-sub">Assistente Python local</div>
     </div>
-    <button class="btn-limpar" onclick="limparHistorico()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-        <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-      </svg>
-      Limpar
-    </button>
+    <div class="header-acoes">
+      <button class="btn-indexar" id="btn-indexar" onclick="indexarDados()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+        </svg>
+        <span id="btn-indexar-label">Indexar dados</span>
+      </button>
+      <button class="btn-limpar" onclick="limparHistorico()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+          <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
+        Limpar
+      </button>
+    </div>
   </header>
 
   <!-- Área de mensagens -->
@@ -545,6 +583,79 @@
     $msgs.appendChild(div);
     $input.focus();
   }
+
+  /* ── Botão Indexar dados ── */
+  const $btnIndexar      = document.getElementById('btn-indexar');
+  const $btnIndexarLabel = document.getElementById('btn-indexar-label');
+
+  // Verifica status ao carregar a página
+  async function verificarStatus() {
+    try {
+      const resp = await fetch('/status');
+      const dados = await resp.json();
+      if (dados.tem_arquivos) {
+        $btnIndexar.style.display = 'flex';
+        if (dados.indexado) {
+          $btnIndexar.classList.add('indexado');
+          $btnIndexarLabel.textContent = 'Re-indexar';
+        }
+      }
+    } catch (_) { /* status indisponível — botão permanece oculto */ }
+  }
+
+  async function indexarDados() {
+    if ($btnIndexar.disabled) return;
+
+    // Estado: indexando
+    $btnIndexar.disabled = true;
+    $btnIndexar.classList.remove('indexado');
+    $btnIndexar.innerHTML = `<div class="spinner"></div><span>Indexando…</span>`;
+
+    try {
+      const resp = await fetch('/indexar', { method: 'POST' });
+      const dados = await resp.json();
+
+      if (!resp.ok) {
+        $btnIndexar.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>Erro</span>`;
+        setTimeout(resetarBtnIndexar, 3000);
+        return;
+      }
+
+      // Estado: concluído
+      $btnIndexar.classList.add('indexado');
+      $btnIndexar.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        <span>${dados.chunks} chunks</span>`;
+
+      // Volta ao estado normal após 3 s
+      setTimeout(resetarBtnIndexar, 3000);
+
+    } catch (_) {
+      setTimeout(resetarBtnIndexar, 2000);
+    } finally {
+      $btnIndexar.disabled = false;
+    }
+  }
+
+  function resetarBtnIndexar() {
+    $btnIndexar.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+      </svg>
+      <span id="btn-indexar-label">Re-indexar</span>`;
+    $btnIndexar.classList.add('indexado');
+  }
+
+  verificarStatus();
 
   /* ── Foco inicial ── */
   $input.focus();
